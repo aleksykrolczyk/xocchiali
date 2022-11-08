@@ -9,25 +9,29 @@
 #include <esp_gatt_defs.h>
 #include "stdio.h"
 #include "driver/touch_pad.h"
+#include "driver/gpio.h"
 
 #define PLAY_BUTTON TOUCH_PAD_NUM8
+#define BLINK_GPIO GPIO_NUM_22
 #define TOUCH_THRESH_NO_USE   (0)
 
 #define GATTS_DEMO_CHAR_VAL_LEN_MAX 500
 #define PREPARE_BUF_MAX_SIZE        1024
 #define CHAR_DECLARATION_SIZE       (sizeof(uint8_t))
 
-#define GATTS_NUM_HANDLE_TEST_A     4
+#define DEVICE_NAME "Phone Killer v0.1"
+
 
 static const uint16_t GATTS_SERVICE_PLAY_UUID = 0x00FF;
 static const uint16_t GATTS_CHAR_BUTTON_UUID  = 0xFF01;
 static const uint16_t GATTS_CHAR_LED_UUID     = 0xFF02;
 
-#define DEVICE_NAME "Phone Killer v0.1"
-
 void wait(int duration_milliseconds);
 void configure_play_button(uint8_t);
 uint16_t touchpad_value(uint8_t);
+
+void configure_led(uint8_t);
+void set_led_state(uint8_t, uint8_t);
 
 /* Service */
 
@@ -37,8 +41,8 @@ static const uint16_t character_client_config_uuid = ESP_GATT_UUID_CHAR_CLIENT_C
 static const uint8_t char_prop_read                =  ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_write               = ESP_GATT_CHAR_PROP_BIT_WRITE;
 static const uint8_t char_prop_read_write_notify   = ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
-static const uint8_t heart_measurement_ccc[2]      = {0x00, 0x00};
-static const uint8_t char_value[4]                 = {0x11, 0x22, 0x33, 0x44};
+static uint8_t button_value[2]                 = {0x11, 0x22 };
+static uint8_t led_value[1]                 = {0xFF };
 
 /* Attributes State Machine */
 enum {
@@ -54,7 +58,7 @@ enum {
 
 static const esp_gatts_attr_db_t GATT_DB[GATT_DB_LAST_INDEX] = {
         [IDX_SVC] = {
-                .attr_control = {ESP_GATT_AUTO_RSP},
+                .attr_control = {ESP_GATT_RSP_BY_APP},
                 .att_desc = {
                     .uuid_length = ESP_UUID_LEN_16,
                     .uuid_p = (uint8_t *)&primary_service_uuid,
@@ -68,11 +72,11 @@ static const esp_gatts_attr_db_t GATT_DB[GATT_DB_LAST_INDEX] = {
         // START BUTTON
 
         [IDX_CHARACTERISTIC_BUTTON] = {
-                .attr_control = { ESP_GATT_AUTO_RSP },
+                .attr_control = { ESP_GATT_RSP_BY_APP },
                 .att_desc = {
                     .uuid_length = ESP_UUID_LEN_16,
                     .uuid_p = (uint8_t *) &character_declaration_uuid,
-                    .perm = ESP_GATT_PERM_READ,
+                    .perm = ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                     .max_length = CHAR_DECLARATION_SIZE,
                     .length = CHAR_DECLARATION_SIZE,
                     .value = (uint8_t *) &char_prop_read_write_notify
@@ -80,14 +84,14 @@ static const esp_gatts_attr_db_t GATT_DB[GATT_DB_LAST_INDEX] = {
         },
 
         [IDX_CHARACTERISTIC_VALUE_BUTTON] = {
-                .attr_control = { ESP_GATT_AUTO_RSP },
+                .attr_control = { ESP_GATT_RSP_BY_APP },
                 .att_desc = {
                     .uuid_length = ESP_UUID_LEN_16,
                     .uuid_p = (uint8_t * ) &GATTS_CHAR_BUTTON_UUID,
-                    .perm = ESP_GATT_PERM_READ,  // | ESP_GATT_PERM_WRITE,
+                    .perm = ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                     .max_length = GATTS_DEMO_CHAR_VAL_LEN_MAX,
-                    .length = sizeof(char_value),
-                    .value = (uint8_t *) &char_value,
+                    .length = sizeof(button_value),
+                    .value = (uint8_t *) button_value,
                 },
         },
 
@@ -95,7 +99,7 @@ static const esp_gatts_attr_db_t GATT_DB[GATT_DB_LAST_INDEX] = {
         //  START LED
 
         [IDX_CHARACTERISTIC_LED] = {
-                .attr_control = { ESP_GATT_AUTO_RSP },
+                .attr_control = { ESP_GATT_RSP_BY_APP },
                 .att_desc = {
                         .uuid_length = ESP_UUID_LEN_16,
                         .uuid_p = (uint8_t *) &character_declaration_uuid,
@@ -107,14 +111,14 @@ static const esp_gatts_attr_db_t GATT_DB[GATT_DB_LAST_INDEX] = {
         },
 
         [IDX_CHARACTERISTIC_VALUE_LED] = {
-                .attr_control = { ESP_GATT_AUTO_RSP },
+                .attr_control = { ESP_GATT_RSP_BY_APP },
                 .att_desc = {
                         .uuid_length = ESP_UUID_LEN_16,
                         .uuid_p = (uint8_t * ) &GATTS_CHAR_LED_UUID,
-                        .perm =  ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                        .perm = ESP_GATT_PERM_WRITE,
                         .max_length = GATTS_DEMO_CHAR_VAL_LEN_MAX,
-                        .length = sizeof(char_value),
-                        .value = (uint8_t *) &char_value,
+                        .length = sizeof(led_value),
+                        .value = (uint8_t *) button_value,
                 },
         },
         // END LED

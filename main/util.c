@@ -26,3 +26,12 @@ uint16_t touchpad_value(uint8_t touch_num) {
     touch_pad_read(touch_num, &touch_value);
     return touch_value;
 }
+
+void configure_led(uint8_t led_num) {
+    gpio_reset_pin(led_num);
+    gpio_set_direction(led_num, GPIO_MODE_OUTPUT);
+}
+
+void set_led_state(uint8_t led_num, uint8_t led_state) {
+    gpio_set_level(led_num, led_state);
+}
